@@ -63,7 +63,7 @@ object DeepSize {
           case c =>
             current += thisSize
             var currentClass: Class[_] = c
-            do {
+            while {
               val objFields = currentClass.getDeclaredFields
               for(field <- objFields) {
                 if (
@@ -77,7 +77,9 @@ object DeepSize {
                 }
               }
               currentClass = currentClass.getSuperclass
-            } while (currentClass != null)
+
+              currentClass != null
+            } do ()
 
         }
 

@@ -2,16 +2,16 @@ package bench
 import java.math.{MathContext, RoundingMode}
 import java.text.{DecimalFormat, NumberFormat}
 import java.util.Locale
+import pprint.PPrinter.Color as pprint
 
-import ammonite.ops._
-import pprint.Config.Colors._
+import java.nio.file.{Files, Paths}
 /**
   * Created by haoyi on 9/26/16.
   */
 object AnalyzeMain {
   def main(args: Array[String]): Unit = {
     val results = upickle.default.read[Map[(String, String, Long), Vector[Long]]](
-      read! pwd/'target/"results.json"
+      Files.readString(Paths.get( "target/results.json"))
     )
     val grouped: Map[String, Map[String, Map[Long, (Long, String)]]] = {
       results.groupBy{case ((bench, coll, size), res) => bench }
@@ -36,7 +36,7 @@ object AnalyzeMain {
                   else new DecimalFormat("0.0").format(stdDev * 100.0 / math.abs(mean)) + "%"
 
                   (mean / accuracy * accuracy, stdDevStr)
-                }
+                }.toMap
             }
         }
     }

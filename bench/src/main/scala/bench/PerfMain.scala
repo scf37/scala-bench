@@ -1,9 +1,10 @@
 package bench
 
+import java.nio.file.{Files, Paths}
 import java.text.NumberFormat
+import java.time.Duration
 import java.util.Locale
-
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters.*
 import scala.collection.immutable.Queue
 import scala.collection.{SortedSet, mutable}
 
@@ -25,9 +26,9 @@ object PerfMain{
     // How many times to repeat each benchmark
     val repeats = 7
     // How long each benchmark runs, in millis
-    val duration = 2000
+    val durationNs = Duration.ofMillis(2000).toNanos
     // How long a benchmark can run before we stop incrementing it
-    val cutoff = 400 * 1000 * 1000
+    val cutoffNs = Duration.ofMillis(2000).toNanos
 
     printRow("Size", sizes)
     val output = mutable.Map.empty[(String, String, Long), mutable.Buffer[Long]]
@@ -48,21 +49,21 @@ object PerfMain{
               def handle(run: Boolean) = {
                 System.gc()
 
-                val start = System.currentTimeMillis()
+                val start = System.nanoTime()
                 var count = 0
-                while(System.currentTimeMillis() - start < duration){
+                while(System.nanoTime() - start < durationNs){
                   if (run) bench.run(size)
                   else bench.initializer(size)
                   count += 1
                 }
-                val end = System.currentTimeMillis()
+                val end = System.nanoTime()
                 (count, end - start)
               }
               val (initCounts, initTime) = handle(run = false)
               val (runCounts, runTime) = handle(run = true)
-              val res = ((runTime.toDouble / runCounts - initTime.toDouble / initCounts) * 1000000).toLong
+              val res = runTime / runCounts - initTime / initCounts
               buf.append(res)
-              if (res > cutoff) {
+              if (res > cutoffNs) {
                 cutoffSizes(key) = math.min(
                   cutoffSizes.getOrElse(key, Int.MaxValue),
                   size
@@ -74,11 +75,7 @@ object PerfMain{
         }
       }
     }
-    import ammonite.ops._
-    write(
-      pwd/'target/"results.json",
-      upickle.default.write(output.mapValues(_.toList).toMap)
-    )
+    Files.writeString(Paths.get("target/results.json"), upickle.default.write(output.mapValues(_.toList).toMap))
   }
 }
 

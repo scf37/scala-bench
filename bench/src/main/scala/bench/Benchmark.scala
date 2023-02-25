@@ -1,7 +1,8 @@
 package bench
 
 import scala.collection.mutable
-
+import scala.jdk.CollectionConverters.*
+import scala.util.chaining.*
 case class Benchmark(name: String,
                      cases: Benchmark.Case[_]*)
 object Benchmark{
@@ -123,6 +124,33 @@ object Benchmark{
           i += 1
         }
         b
+      },
+      Case("j.ArrayList", n => n) { n =>
+        val b = java.util.ArrayList[Object]
+        var i = 0
+        while (i < n) {
+          b.add(obj)
+          i += 1
+        }
+        b
+      },
+      Case("j.HashSet", n => n) { n =>
+        val b = java.util.HashSet[Object]
+        var i = 0
+        while (i < n) {
+          b.add(obj)
+          i += 1
+        }
+        b
+      },
+      Case("j.HashMap", n => n) { n =>
+        val b = java.util.HashMap[Object, Object]
+        var i = 0
+        while (i < n) {
+          b.put(obj, obj)
+          i += 1
+        }
+        b
       }
     ),
     Benchmark(
@@ -161,14 +189,43 @@ object Benchmark{
         while (a.nonEmpty) a.remove(a.length-1)
         a
       },
-      Case("m.Set.remove", Array.fill(_)(obj).to[mutable.Set]){ a =>
-        while (a.nonEmpty) a.remove(a.head)
+      Case("m.Set.remove", Array.fill(_)(obj).to(mutable.Set).pipe(c => c -> c.toArray)){ case (a, keys) =>
+        var i = 0
+        while (i < keys.length) {
+          a.remove(keys(i))
+          i += 1
+        }
         a
       },
-      Case("m.Map.remove", x => mutable.Map(Array.fill(x)(obj -> obj):_*)){ a =>
-        while (a.nonEmpty) a.remove(a.head._1)
+      Case("m.Map.remove", x => mutable.Map(Array.fill(x)(obj -> obj):_*).pipe(c => c -> c.keysIterator.toArray)){ case (a, keys) =>
+        var i = 0
+        while (i < keys.length) {
+          a.remove(keys(i))
+          i += 1
+        }
+        a
+      },
+      Case("j.ArrayList.remove", x => mutable.Buffer.fill(x)(obj).asJava) { a =>
+        while (!a.isEmpty) a.remove(a.size() - 1)
+        a
+      },
+      Case("j.HashSet.remove", Array.fill(_)(obj).to(mutable.Set).asJava.pipe(c => c -> c.toArray)) { case (a, keys) =>
+        var i = 0
+        while (i < keys.length) {
+          a.remove(keys(i))
+          i += 1
+        }
+        a
+      },
+      Case("j.HashMap.remove", x => mutable.Map(Array.fill(x)(obj -> obj): _*).asJava.pipe(c => c -> c.keySet().toArray)) { case (a, keys) =>
+        var i = 0
+        while (i < keys.length) {
+          a.remove(keys(i))
+          i += 1
+        }
         a
       }
+
     ),
     Benchmark(
       "concat",
@@ -196,11 +253,20 @@ object Benchmark{
       Case("m.Buffer", x => pair(mutable.Buffer.fill(x)(obj))){ case (a, b) =>
         a.appendAll(b)
       },
-      Case("m.Set", x => pair(Array.fill(x)(obj).to[mutable.Set])){ case (a, b) =>
+      Case("m.Set", x => pair(Array.fill(x)(obj).to(mutable.Set))){ case (a, b) =>
         a ++= b
       },
       Case("m.Map", x => pair(mutable.Map(Array.fill(x)(obj -> obj):_*))){ case (a, b) =>
         a ++= b
+      },
+      Case("j.ArrayList", x => pair(mutable.Buffer.fill(x)(obj).asJava)) { case (a, b) =>
+        a.addAll(b)
+      },
+      Case("j.HashSet", x => pair(Array.fill(x)(obj).to(mutable.Set).asJava)) { case (a, b) =>
+        a.addAll(b)
+      },
+      Case("j.HashMap", x => pair(mutable.Map(Array.fill(x)(obj -> obj): _*).asJava)) { case (a, b) =>
+        a.putAll(b)
       }
     ),
     Benchmark(
@@ -217,7 +283,7 @@ object Benchmark{
       Case("List-while", List.fill(_)(obj)){ case a =>
         var last = nullO
         var i = 0
-        while(i < 100) {
+        while(i < 10) {
           var j = a
           while(j.nonEmpty){
             last = j.head
@@ -232,6 +298,19 @@ object Benchmark{
         var last = nullO
         while(i < 10) {
           a.foreach(last = _)
+          i += 1
+        }
+        last
+      },
+      Case("Vector-while", Vector.fill(_)(obj)) { a =>
+        var i = 0
+        var last = nullO
+        while (i < 10) {
+          var j = 0
+          while (j < a.size) {
+            last = a(j)
+            j += 1
+          }
           i += 1
         }
         last
@@ -266,7 +345,7 @@ object Benchmark{
       Case("Array-while", x => x -> Array.fill(x)(obj)){ case (n, a) =>
         var last = nullO
         var i = 0
-        while(i < 100) {
+        while(i < 10) {
           var j = 0
           while(j < n){
             last = a(j)
@@ -279,13 +358,26 @@ object Benchmark{
       Case("m.Buffer", x => mutable.Buffer.fill(x)(obj)){ a =>
         var last = nullO
         var i = 0
-        while(i < 100) {
+        while(i < 10) {
           a.foreach(last = _)
           i += 1
         }
         last
       },
-      Case("m.Set", Array.fill(_)(obj).to[mutable.Set]){ a =>
+      Case("m.Buffer-while", x => mutable.Buffer.fill(x)(obj)) { a =>
+        var last = nullO
+        var i = 0
+        while (i < 10) {
+          var j = 0
+          while (j < a.size) {
+            last = a(j)
+            j += 1
+          }
+          i += 1
+        }
+        last
+      },
+      Case("m.Set", Array.fill(_)(obj).to(mutable.Set)){ a =>
         var last = nullO
         var i = 0
         while(i < 10) {
@@ -299,6 +391,46 @@ object Benchmark{
         var i = 0
         while(i < 10) {
           a.foreach(last = _)
+          i += 1
+        }
+        last
+      },
+      Case("j.ArrayList", x => mutable.Buffer.fill(x)(obj).asJava) { a =>
+        var last = nullO
+        var i = 0
+        while (i < 10) {
+          a.forEach(last = _)
+          i += 1
+        }
+        last
+      },
+      Case("j.ArrayList-while", x => mutable.Buffer.fill(x)(obj).asJava) { a =>
+        var last = nullO
+        var i = 0
+        while (i < 10) {
+          var j = 0
+          while (j < a.size) {
+            last = a.get(j)
+            j += 1
+          }
+          i += 1
+        }
+        last
+      },
+      Case("j.HashSet", Array.fill(_)(obj).to(mutable.Set).asJava) { a =>
+        var last = nullO
+        var i = 0
+        while (i < 10) {
+          a.forEach(last = _)
+          i += 1
+        }
+        last
+      },
+      Case("j.HashMap", x => mutable.Map(Array.fill(x)(obj -> obj): _*).asJava) { a =>
+        var last = nullO
+        var i = 0
+        while (i < 10) {
+          a.forEach((k, v) => last = k)
           i += 1
         }
         last
@@ -396,7 +528,7 @@ object Benchmark{
       },
       Case("m.Set", x => {
         val r = Array.fill(x)(obj)
-        r -> r.to[mutable.Set]
+        r -> r.to(mutable.Set)
       }){ case (keys, a) =>
         var last = false
         var i = 0
@@ -422,6 +554,53 @@ object Benchmark{
           val n = keys.length
           while (j < n) {
             last = a(keys(j))
+            j += 1
+          }
+          i += 1
+        }
+        last
+      },
+      Case("j.ArrayList", x => x -> mutable.Buffer.fill(x)(obj).asJava) { case (n, a) =>
+        var last = nullO
+        var i = 0
+        while (i < 100) {
+          var j = 0
+          while (j < n) {
+            last = a.get(j)
+            j += 1
+          }
+          i += 1
+        }
+        last
+      },
+      Case("j.HashSet", x => {
+        val r = Array.fill(x)(obj)
+        r -> r.to(mutable.Set).asJava
+      }) { case (keys, a) =>
+        var last = false
+        var i = 0
+        while (i < 100) {
+          val n = keys.length
+          var j = 0
+          while (j < n) {
+            last = a.contains(keys(j))
+            j += 1
+          }
+          i += 1
+        }
+        last
+      },
+      Case("j.HashMap", x => {
+        val r = mutable.Map(Array.fill(x)(obj -> obj): _*).asJava
+        r.keySet().toArray -> r
+      }) { case (keys, a) =>
+        var last = nullO
+        var i = 0
+        while (i < 100) {
+          var j = 0
+          val n = keys.length
+          while (j < n) {
+            last = a.get(keys(j))
             j += 1
           }
           i += 1
